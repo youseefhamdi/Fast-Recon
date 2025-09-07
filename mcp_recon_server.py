@@ -1,6 +1,3 @@
-# MCP RECON Server - Bug Bounty Reconnaissance Tools Integration
-# Updated for MCP >= 1.13.1 (no decorators)
-
 import subprocess
 import asyncio
 import logging
@@ -13,8 +10,6 @@ import mcp.server.stdio
 server = Server("BugBounty-Recon-Tools")
 
 class ReconToolsIntegration:
-    """Integration class for various reconnaissance tools"""
-
     def __init__(self):
         self.tools = {
             'subfinder': {'cmd': 'subfinder', 'type': 'passive'},
@@ -63,35 +58,43 @@ class ReconToolsIntegration:
         }
         return commands.get(tool_name, [tool_name, target])
 
-# Tool integration object
+# Create instance
 recon = ReconToolsIntegration()
 
 # ----------------------------
-# Tool functions
+# Tools
 # ----------------------------
 
+@server.tool()
 async def subdomain_enum_subfinder(domain: str, sources: Optional[str] = None) -> dict:
     options = {"sources": sources} if sources else {}
     return await recon.run_tool("subfinder", domain, options)
 
+@server.tool()
 async def subdomain_enum_assetfinder(domain: str) -> dict:
     return await recon.run_tool("assetfinder", domain)
 
+@server.tool()
 async def comprehensive_enum_amass(domain: str, passive: bool = False) -> dict:
     return await recon.run_tool("amass", domain, {"passive": passive})
 
+@server.tool()
 async def automated_recon_bbot(target: str, modules: Optional[str] = None) -> dict:
     return await recon.run_tool("bbot", target, {"modules": modules} if modules else {})
 
+@server.tool()
 async def fuzzing_ffuf(domain: str, wordlist: Optional[str] = None, threads: int = 10) -> dict:
     return await recon.run_tool("ffuf", domain, {"wordlist": wordlist, "threads": threads})
 
+@server.tool()
 async def comprehensive_sudomy(domain: str, passive_only: bool = False) -> dict:
     return await recon.run_tool("sudomy", domain, {"passive": passive_only})
 
+@server.tool()
 async def dns_bruteforce_dnscan(domain: str, wordlist: Optional[str] = None, threads: int = 8) -> dict:
     return await recon.run_tool("dnscan", domain, {"wordlist": wordlist, "threads": threads})
 
+@server.tool()
 async def asn_cidr_enum(target: str, enum_type: str = "asn") -> dict:
     results = {}
     try:
@@ -107,6 +110,7 @@ async def asn_cidr_enum(target: str, enum_type: str = "asn") -> dict:
     except Exception as e:
         return {"error": str(e)}
 
+@server.tool()
 async def multi_tool_recon(domain: str, tools: Optional[List[str]] = None, passive_only: bool = False) -> dict:
     if tools is None:
         tools = ["subfinder", "assetfinder", "amass"]
@@ -126,11 +130,13 @@ async def multi_tool_recon(domain: str, tools: Optional[List[str]] = None, passi
 # Resources
 # ----------------------------
 
+@server.resource("recon://tools/list")
 async def list_available_tools() -> str:
     return "Available Reconnaissance Tools:\n" + "\n".join(
         f"- {name}: {info['type']} enumeration tool" for name, info in recon.tools.items()
     )
 
+@server.resource("recon://wordlists/common")
 async def get_common_wordlists() -> str:
     wordlists = [
         "/usr/share/wordlists/SecLists/Discovery/DNS/subdomains-top1million-20000.txt",
@@ -141,26 +147,8 @@ async def get_common_wordlists() -> str:
     return "Common Wordlists for Reconnaissance:\n" + "\n".join(f"- {wl}" for wl in wordlists)
 
 # ----------------------------
-# Register tools/resources
+# Run server
 # ----------------------------
-
-server.register_tool(subdomain_enum_subfinder)
-server.register_tool(subdomain_enum_assetfinder)
-server.register_tool(comprehensive_enum_amass)
-server.register_tool(automated_recon_bbot)
-server.register_tool(fuzzing_ffuf)
-server.register_tool(comprehensive_sudomy)
-server.register_tool(dns_bruteforce_dnscan)
-server.register_tool(asn_cidr_enum)
-server.register_tool(multi_tool_recon)
-
-server.register_resource("recon://tools/list", list_available_tools)
-server.register_resource("recon://wordlists/common", get_common_wordlists)
-
-# ----------------------------
-# Server startup
-# ----------------------------
-
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     mcp.server.stdio.run_server(server)
