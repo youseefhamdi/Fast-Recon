@@ -1,5 +1,5 @@
 # MCP RECON Server - Bug Bounty Reconnaissance Tools Integration
-# Updated for MCP >= 1.13.1
+# Updated for MCP >= 1.13.1 (no decorators)
 
 import subprocess
 import asyncio
@@ -27,14 +27,12 @@ class ReconToolsIntegration:
         }
 
     async def run_tool(self, tool_name: str, target: str, options: Dict = None) -> Dict:
-        """Execute a reconnaissance tool with specified parameters"""
         if tool_name not in self.tools:
             return {"error": f"Tool {tool_name} not found"}
 
         try:
             cmd_parts = self._build_command(tool_name, target, options)
             result = subprocess.run(cmd_parts, capture_output=True, text=True, timeout=300)
-
             return {
                 "tool": tool_name,
                 "target": target,
@@ -49,9 +47,7 @@ class ReconToolsIntegration:
             return {"error": f"Failed to run {tool_name}: {str(e)}"}
 
     def _build_command(self, tool_name: str, target: str, options: Dict = None) -> List[str]:
-        """Build command based on tool type and parameters"""
         options = options or {}
-
         commands = {
             'subfinder': ["subfinder", "-d", target, "-silent", "-json"],
             'assetfinder': ["assetfinder", "--subs-only", target],
@@ -65,91 +61,57 @@ class ReconToolsIntegration:
             'sudomy': ["sudomy", "-d", target, "--json"],
             'dnscan': ["python3", "dnscan.py", "-d", target, "-o", "/dev/stdout"],
         }
+        return commands.get(tool_name, [tool_name, target])
 
-        base_cmd = commands.get(tool_name, [tool_name, target])
-
-        if options:
-            if "threads" in options:
-                base_cmd.extend(["-t", str(options["threads"])])
-            if "timeout" in options:
-                base_cmd.extend(["--timeout", str(options["timeout"])])
-            if "sources" in options:
-                base_cmd.extend(["-s", options["sources"]])
-
-        return base_cmd
-
-# Initialize the tool integration
+# Tool integration object
 recon = ReconToolsIntegration()
 
 # ----------------------------
-# Tools
+# Tool functions
 # ----------------------------
 
-@server.tool()
 async def subdomain_enum_subfinder(domain: str, sources: Optional[str] = None) -> dict:
     options = {"sources": sources} if sources else {}
     return await recon.run_tool("subfinder", domain, options)
 
-@server.tool()
 async def subdomain_enum_assetfinder(domain: str) -> dict:
     return await recon.run_tool("assetfinder", domain)
 
-@server.tool()
 async def comprehensive_enum_amass(domain: str, passive: bool = False) -> dict:
-    options = {"passive": passive}
-    return await recon.run_tool("amass", domain, options)
+    return await recon.run_tool("amass", domain, {"passive": passive})
 
-@server.tool()
 async def automated_recon_bbot(target: str, modules: Optional[str] = None) -> dict:
-    options = {"modules": modules} if modules else {}
-    return await recon.run_tool("bbot", target, options)
+    return await recon.run_tool("bbot", target, {"modules": modules} if modules else {})
 
-@server.tool()
 async def fuzzing_ffuf(domain: str, wordlist: Optional[str] = None, threads: int = 10) -> dict:
-    options = {"wordlist": wordlist, "threads": threads}
-    return await recon.run_tool("ffuf", domain, options)
+    return await recon.run_tool("ffuf", domain, {"wordlist": wordlist, "threads": threads})
 
-@server.tool()
 async def comprehensive_sudomy(domain: str, passive_only: bool = False) -> dict:
-    options = {"passive": passive_only}
-    return await recon.run_tool("sudomy", domain, options)
+    return await recon.run_tool("sudomy", domain, {"passive": passive_only})
 
-@server.tool()
 async def dns_bruteforce_dnscan(domain: str, wordlist: Optional[str] = None, threads: int = 8) -> dict:
-    options = {"wordlist": wordlist, "threads": threads}
-    return await recon.run_tool("dnscan", domain, options)
+    return await recon.run_tool("dnscan", domain, {"wordlist": wordlist, "threads": threads})
 
-@server.tool()
 async def asn_cidr_enum(target: str, enum_type: str = "asn") -> dict:
+    results = {}
     try:
-        results = {}
         if enum_type in ["asn", "both"]:
             asn_cmd = ["asnmap", "-d", target, "-json"]
             asn_result = subprocess.run(asn_cmd, capture_output=True, text=True, timeout=60)
-            results["asn"] = {
-                "success": asn_result.returncode == 0,
-                "output": asn_result.stdout,
-                "error": asn_result.stderr,
-            }
+            results["asn"] = {"success": asn_result.returncode == 0, "output": asn_result.stdout, "error": asn_result.stderr}
         if enum_type in ["cidr", "both"]:
             cidr_cmd = ["asnmap", "-a", target, "-cidr", "-json"]
             cidr_result = subprocess.run(cidr_cmd, capture_output=True, text=True, timeout=60)
-            results["cidr"] = {
-                "success": cidr_result.returncode == 0,
-                "output": cidr_result.stdout,
-                "error": cidr_result.stderr,
-            }
+            results["cidr"] = {"success": cidr_result.returncode == 0, "output": cidr_result.stdout, "error": cidr_result.stderr}
         return results
     except Exception as e:
-        return {"error": f"Failed to enumerate ASN/CIDR: {str(e)}"}
+        return {"error": str(e)}
 
-@server.tool()
 async def multi_tool_recon(domain: str, tools: Optional[List[str]] = None, passive_only: bool = False) -> dict:
     if tools is None:
         tools = ["subfinder", "assetfinder", "amass"]
         if not passive_only:
             tools.extend(["ffuf", "dnscan"])
-
     results = {}
     for tool in tools:
         if passive_only and recon.tools.get(tool, {}).get("type") == "active":
@@ -164,13 +126,11 @@ async def multi_tool_recon(domain: str, tools: Optional[List[str]] = None, passi
 # Resources
 # ----------------------------
 
-@server.resource("recon://tools/list")
 async def list_available_tools() -> str:
     return "Available Reconnaissance Tools:\n" + "\n".join(
         f"- {name}: {info['type']} enumeration tool" for name, info in recon.tools.items()
     )
 
-@server.resource("recon://wordlists/common")
 async def get_common_wordlists() -> str:
     wordlists = [
         "/usr/share/wordlists/SecLists/Discovery/DNS/subdomains-top1million-20000.txt",
@@ -179,6 +139,23 @@ async def get_common_wordlists() -> str:
         "/usr/share/wordlists/SecLists/Discovery/Web-Content/big.txt",
     ]
     return "Common Wordlists for Reconnaissance:\n" + "\n".join(f"- {wl}" for wl in wordlists)
+
+# ----------------------------
+# Register tools/resources
+# ----------------------------
+
+server.register_tool(subdomain_enum_subfinder)
+server.register_tool(subdomain_enum_assetfinder)
+server.register_tool(comprehensive_enum_amass)
+server.register_tool(automated_recon_bbot)
+server.register_tool(fuzzing_ffuf)
+server.register_tool(comprehensive_sudomy)
+server.register_tool(dns_bruteforce_dnscan)
+server.register_tool(asn_cidr_enum)
+server.register_tool(multi_tool_recon)
+
+server.register_resource("recon://tools/list", list_available_tools)
+server.register_resource("recon://wordlists/common", get_common_wordlists)
 
 # ----------------------------
 # Server startup
