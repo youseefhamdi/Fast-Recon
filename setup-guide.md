@@ -14,7 +14,7 @@ Before setting up the MCP integration for bug bounty reconnaissance tools, ensur
 - **Git**: For cloning repositories
 
 #### Essential Dependencies
-```bash
+```bash 
 # Update system packages
 sudo apt update && sudo apt upgrade -y
 
